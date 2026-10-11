@@ -1,0 +1,1007 @@
+<!doctype html>
+<html lang="ko">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>단관극장</title>
+<meta name="description" content="유튜브 링크를 넣으면 3D 극장 스크린에 걸어 주는 페이지">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Black+Han+Sans&family=Gowun+Dodum&display=swap">
+<style>
+/* 레이아웃: 화면 전체가 3D 극장이고, 왼쪽 아래에 옛 입장권 모양 패널 하나만 둔다 */
+:root{
+  --hall:#160a0d;
+  --ticket:#d5e4d0;
+  --ink:#1f2c48;
+  --stamp:#b3242e;
+  --brass:#c9a15b;
+  --hud:#ffecd6;
+  --hud-bg:rgba(22,8,11,.66);
+  --display:"Black Han Sans","Malgun Gothic","Apple SD Gothic Neo",sans-serif;
+  --body:"Gowun Dodum","Malgun Gothic","Apple SD Gothic Neo",sans-serif;
+  color-scheme:dark;
+}
+*{box-sizing:border-box}
+html,body{margin:0;height:100%;background:var(--hall);color:var(--hud);font-family:var(--body);overflow:hidden;-webkit-tap-highlight-color:transparent}
+[hidden]{display:none!important}
+#stage{position:fixed;inset:0}
+.css-layer,.gl-layer{position:absolute;inset:0}
+.gl-layer{touch-action:none;outline:none}
+.screen-surface{background:#0c0b0e;overflow:hidden}
+.screen-surface iframe{width:100%;height:100%;border:0;display:block;pointer-events:none}
+
+/* 입장권 패널 */
+#overlay{position:fixed;inset:0;z-index:5;display:flex;align-items:flex-end;justify-content:flex-start;
+  padding:max(24px,env(safe-area-inset-top)) max(24px,env(safe-area-inset-right)) max(24px,env(safe-area-inset-bottom)) max(24px,env(safe-area-inset-left));
+  background:linear-gradient(90deg,rgba(12,4,7,.8) 0%,rgba(12,4,7,.4) 42%,rgba(12,4,7,0) 72%);overflow-y:auto}
+.ticket{--stub:168px;display:flex;width:min(660px,100%);background:var(--ticket);color:var(--ink);border-radius:6px;
+  box-shadow:0 28px 70px rgba(0,0,0,.6);
+  -webkit-mask:radial-gradient(circle 11px at calc(100% - var(--stub)) 0,#0000 98%,#000) top/100% 51% no-repeat,radial-gradient(circle 11px at calc(100% - var(--stub)) 100%,#0000 98%,#000) bottom/100% 51% no-repeat;
+          mask:radial-gradient(circle 11px at calc(100% - var(--stub)) 0,#0000 98%,#000) top/100% 51% no-repeat,radial-gradient(circle 11px at calc(100% - var(--stub)) 100%,#0000 98%,#000) bottom/100% 51% no-repeat}
+.ticket-main{flex:1;min-width:0;padding:28px 30px 26px;display:flex;flex-direction:column;gap:16px}
+.ticket-stub{width:var(--stub);flex:none;border-left:2px dashed rgba(31,44,72,.35);padding:26px 20px;display:flex;flex-direction:column;gap:10px;font-variant-numeric:tabular-nums}
+.ticket-stub b{font-family:var(--display);font-weight:400;font-size:26px;color:var(--stamp);line-height:1}
+.ticket-stub dl{margin:0;display:grid;grid-template-columns:auto 1fr;gap:6px 10px;font-size:14px}
+.ticket-stub dt{opacity:.62}
+.ticket-stub dd{margin:0}
+.ticket-stub .serial{margin-top:auto;font-size:13px;letter-spacing:.06em;opacity:.7}
+h1{margin:0;font-family:var(--display);font-weight:400;font-size:60px;line-height:.95;color:var(--stamp);letter-spacing:-.01em;text-wrap:balance}
+.lede{margin:0;font-size:16px;line-height:1.6;max-width:36em}
+#now{margin:0;font-size:15px;line-height:1.5;padding:8px 12px;background:rgba(31,44,72,.08);border-radius:3px}
+#now strong{font-weight:400;color:var(--stamp)}
+form{display:flex;flex-direction:column;gap:8px}
+label{font-size:14px}
+.row{display:flex;gap:8px}
+input[type=url]{flex:1;min-width:0;font:15px/1.2 var(--body);color:var(--ink);background:rgba(255,255,255,.6);border:1.5px solid var(--ink);border-radius:3px;padding:12px}
+input[type=url]::placeholder{color:rgba(31,44,72,.45)}
+button{font:inherit;cursor:pointer}
+.go{flex:none;font-family:var(--display);font-size:19px;color:var(--ticket);background:var(--ink);border:0;border-radius:3px;padding:0 22px;transition:background .15s}
+.go:hover{background:var(--stamp)}
+:focus-visible{outline:3px solid var(--stamp);outline-offset:2px}
+.links{display:flex;flex-wrap:wrap;gap:4px 18px}
+.textlink{background:none;border:0;padding:2px 0;color:var(--ink);font-size:14px;text-decoration:underline;text-underline-offset:3px;text-decoration-color:rgba(31,44,72,.4)}
+.textlink:hover{color:var(--stamp)}
+#err{margin:0;color:var(--stamp);font-size:14px;line-height:1.5}
+.keys{margin:0;display:grid;grid-template-columns:repeat(auto-fill,minmax(150px,1fr));gap:6px 14px;font-size:13px;line-height:1.4;border-top:1px solid rgba(31,44,72,.18);padding-top:14px}
+.keys div{display:flex;gap:8px;align-items:center}
+kbd{font:12px/1 var(--body);border:1px solid rgba(31,44,72,.5);border-bottom-width:2px;border-radius:3px;padding:3px 6px;background:rgba(255,255,255,.35);white-space:nowrap}
+
+/* 관람 중 화면 표시 */
+#hud{position:fixed;inset:0;z-index:3;pointer-events:none}
+#cross{position:absolute;left:50%;top:50%;width:6px;height:6px;margin:-3px 0 0 -3px;border-radius:50%;background:var(--hud);opacity:.75;box-shadow:0 0 0 1.5px rgba(0,0,0,.45)}
+#prompt{position:absolute;left:50%;top:calc(50% + 30px);transform:translateX(-50%);font-size:15px;background:var(--hud-bg);padding:7px 13px;border-radius:4px;white-space:nowrap}
+#toast{position:absolute;left:50%;top:max(22px,env(safe-area-inset-top));transform:translateX(-50%);font-size:15px;background:var(--hud-bg);padding:8px 16px;border-radius:4px;white-space:nowrap;transition:opacity .25s}
+#toast.off{opacity:0}
+#hint{position:absolute;left:max(18px,env(safe-area-inset-left));bottom:max(16px,env(safe-area-inset-bottom));display:flex;flex-wrap:wrap;gap:6px 14px;font-size:13px;opacity:.75;max-width:calc(100% - 36px)}
+#hint kbd{color:var(--hud);border-color:rgba(255,236,214,.5);background:rgba(255,236,214,.08)}
+
+/* 터치 조작 */
+#stick{position:absolute;left:max(22px,env(safe-area-inset-left));bottom:max(22px,env(safe-area-inset-bottom));width:124px;height:124px;border-radius:50%;border:2px solid rgba(255,236,214,.35);background:rgba(22,8,11,.35);pointer-events:auto;touch-action:none}
+#knob{position:absolute;left:50%;top:50%;width:52px;height:52px;margin:-26px 0 0 -26px;border-radius:50%;background:rgba(255,236,214,.55)}
+#tbtns{position:absolute;right:max(18px,env(safe-area-inset-right));bottom:max(22px,env(safe-area-inset-bottom));display:flex;flex-direction:column;gap:10px;pointer-events:auto}
+#tbtns button{min-width:74px;height:48px;border-radius:24px;border:1.5px solid rgba(255,236,214,.4);background:var(--hud-bg);color:var(--hud);font-size:15px;touch-action:manipulation}
+
+@media (max-width:620px){
+  .ticket{-webkit-mask:none;mask:none}
+  .ticket-stub{display:none}
+  .ticket-main{padding:22px 20px}
+  h1{font-size:46px}
+  #overlay{background:linear-gradient(0deg,rgba(12,4,7,.85) 0%,rgba(12,4,7,.3) 60%,rgba(12,4,7,0) 100%)}
+}
+@media (max-height:520px){
+  .keys{display:none}
+  h1{font-size:40px}
+  .ticket-main{gap:10px;padding-block:18px}
+}
+@media (prefers-reduced-motion:reduce){#toast,.go{transition:none}}
+</style>
+</head>
+<body>
+<div id="stage"></div>
+
+<div id="hud" hidden>
+  <div id="cross"></div>
+  <div id="prompt" hidden></div>
+  <div id="toast" class="off"></div>
+  <div id="hint"></div>
+  <div id="stick" hidden><div id="knob"></div></div>
+  <div id="tbtns" hidden>
+    <button id="tSit" type="button">앉기</button>
+    <button id="tPlay" type="button">재생</button>
+    <button id="tMenu" type="button">메뉴</button>
+  </div>
+</div>
+
+<div id="overlay">
+  <section class="ticket" aria-labelledby="title">
+    <div class="ticket-main">
+      <h1 id="title">단관극장</h1>
+      <p class="lede" id="lede">유튜브 링크를 넣고 입장하면 그 영상이 이 극장 스크린에 걸려요. 객석 사이를 걸어 다니다 마음에 드는 자리에 앉아 보세요.</p>
+      <p id="now" hidden></p>
+      <form id="form" novalidate>
+        <label for="link">유튜브 링크</label>
+        <div class="row">
+          <input id="link" type="url" inputmode="url" autocomplete="off" spellcheck="false" placeholder="https://www.youtube.com/watch?v=…">
+          <button class="go" id="go" type="submit">상영 시작</button>
+        </div>
+        <p id="err" role="alert" hidden></p>
+        <div class="links">
+          <button class="textlink" id="sample" type="button">예시 영상 넣기</button>
+          <button class="textlink" id="fs" type="button">전체 화면으로 보기</button>
+        </div>
+      </form>
+      <div class="keys" id="keys"></div>
+    </div>
+    <aside class="ticket-stub" aria-hidden="true">
+      <b>입장권</b>
+      <dl><dt>상영관</dt><dd>제1관</dd><dt>좌석</dt><dd>자유석</dd><dt>구분</dt><dd>일반 1매</dd></dl>
+      <span class="serial" id="serial">No. 000000</span>
+    </aside>
+  </section>
+</div>
+
+<script type="importmap">
+{"imports":{
+  "three":"https://cdn.jsdelivr.net/npm/three@0.160.0/build/three.module.js",
+  "three/addons/":"https://cdn.jsdelivr.net/npm/three@0.160.0/examples/jsm/"
+}}
+</script>
+<script type="module">
+import * as THREE from 'three';
+import { CSS3DRenderer, CSS3DObject } from 'three/addons/renderers/CSS3DRenderer.js';
+import { RoundedBoxGeometry } from 'three/addons/geometries/RoundedBoxGeometry.js';
+import { RectAreaLightUniformsLib } from 'three/addons/lights/RectAreaLightUniformsLib.js';
+
+const $ = (id) => document.getElementById(id);
+const isTouch = matchMedia('(hover: none) and (pointer: coarse)').matches;
+const reduceMotion = matchMedia('(prefers-reduced-motion: reduce)').matches;
+
+// ---------- 극장 치수 (단위: 미터) ----------
+const HALL = { w: 16, d: 21, h: 8.6 };
+const SCREEN = { w: 11.2, h: 6.3, y: 4.4, z: 0.06 };
+const STAGE = { d: 2.2, h: 0.8 };
+const ROWS = 10, SEATS = 14, ROW0 = 5.4, ROW_D = 1.25, STEP = 0.3, PITCH = 0.62;
+const BACK0 = ROW0 + ROWS * ROW_D;
+const ROW_NAMES = '가나다라마바사아자차';
+const SAMPLE = 'https://www.youtube.com/watch?v=aqz-KE-bpKQ';
+const EYE_STAND = 1.62, EYE_SIT = 1.12, RADIUS = 0.2;
+
+$('serial').textContent = 'No. ' + String(Math.floor(Math.random() * 900000) + 100000);
+
+await Promise.race([
+  document.fonts.load('64px "Black Han Sans"').catch(() => {}),
+  new Promise((r) => setTimeout(r, 1500)),
+]);
+
+// ---------- 렌더러 ----------
+const stageEl = $('stage');
+const cssRenderer = new CSS3DRenderer();
+cssRenderer.domElement.className = 'css-layer';
+stageEl.appendChild(cssRenderer.domElement);
+
+const renderer = new THREE.WebGLRenderer({ antialias: true, alpha: true });
+renderer.setClearColor(0x000000, 0);
+renderer.setPixelRatio(Math.min(devicePixelRatio, 1.75));
+renderer.toneMapping = THREE.ACESFilmicToneMapping;
+renderer.toneMappingExposure = 1.15;
+renderer.domElement.className = 'gl-layer';
+renderer.domElement.tabIndex = -1;
+stageEl.appendChild(renderer.domElement);
+const canvas = renderer.domElement;
+
+const scene = new THREE.Scene();
+scene.fog = new THREE.FogExp2(0x0b0507, 0.011);
+const cssScene = new THREE.Scene();
+const camera = new THREE.PerspectiveCamera(70, innerWidth / innerHeight, 0.05, 80);
+camera.rotation.order = 'YXZ';
+
+function resize() {
+  camera.aspect = innerWidth / innerHeight;
+  camera.updateProjectionMatrix();
+  renderer.setSize(innerWidth, innerHeight);
+  cssRenderer.setSize(innerWidth, innerHeight);
+}
+addEventListener('resize', resize);
+resize();
+
+// ---------- 캔버스로 그리는 텍스처 ----------
+function canvasTex(w, h, draw) {
+  const c = document.createElement('canvas');
+  c.width = w; c.height = h;
+  draw(c.getContext('2d'), w, h);
+  const t = new THREE.CanvasTexture(c);
+  t.colorSpace = THREE.SRGBColorSpace;
+  t.wrapS = t.wrapT = THREE.RepeatWrapping;
+  t.anisotropy = 4;
+  return t;
+}
+const carpetTex = canvasTex(256, 256, (g, w, h) => {
+  g.fillStyle = '#3b131a'; g.fillRect(0, 0, w, h);
+  for (let i = 0; i < 5000; i++) {
+    g.fillStyle = `rgba(${Math.random() < 0.5 ? 0 : 110},0,10,${Math.random() * 0.2})`;
+    g.fillRect(Math.random() * w, Math.random() * h, 1.6, 1.6);
+  }
+  g.strokeStyle = 'rgba(190,145,70,.5)'; g.lineWidth = 4;
+  g.beginPath(); g.moveTo(w / 2, 16); g.lineTo(w - 16, h / 2); g.lineTo(w / 2, h - 16); g.lineTo(16, h / 2); g.closePath(); g.stroke();
+  g.fillStyle = 'rgba(190,145,70,.6)';
+  for (const [x, y] of [[w / 2, h / 2], [0, 0], [w, 0], [0, h], [w, h]]) { g.beginPath(); g.arc(x, y, 9, 0, 7); g.fill(); }
+});
+const fabricTex = canvasTex(128, 8, (g, w, h) => {
+  for (let x = 0; x < w; x++) {
+    const s = 0.62 + 0.38 * Math.pow(0.5 + 0.5 * Math.sin((x / w) * Math.PI * 4), 0.7);
+    g.fillStyle = `rgb(${82 * s | 0},${26 * s | 0},${34 * s | 0})`;
+    g.fillRect(x, 0, 1, h);
+  }
+});
+const woodTex = canvasTex(256, 64, (g, w, h) => {
+  g.fillStyle = '#3e2417'; g.fillRect(0, 0, w, h);
+  for (let i = 0; i < 70; i++) {
+    g.strokeStyle = `rgba(${Math.random() < 0.5 ? 20 : 90},${Math.random() < 0.5 ? 10 : 50},0,${0.15 + Math.random() * 0.2})`;
+    g.lineWidth = 0.6 + Math.random() * 1.6;
+    const y = Math.random() * h;
+    g.beginPath(); g.moveTo(0, y); g.bezierCurveTo(w * 0.3, y + 3, w * 0.6, y - 3, w, y); g.stroke();
+  }
+  g.fillStyle = 'rgba(0,0,0,.45)'; g.fillRect(0, h - 2, w, 2);
+});
+function signTex(text, bg, fg, w = 512, h = 180, size = 110) {
+  return canvasTex(w, h, (g) => {
+    g.fillStyle = bg; g.fillRect(0, 0, w, h);
+    g.fillStyle = fg; g.font = `${size}px "Black Han Sans", sans-serif`;
+    g.textAlign = 'center'; g.textBaseline = 'middle';
+    g.fillText(text, w / 2, h / 2 + size * 0.05);
+  });
+}
+
+// 상자를 만들고 무늬가 실제 크기대로 깔리도록 UV를 월드 좌표로 맞춘다
+function worldUV(geo, tile) {
+  const p = geo.attributes.position, n = geo.attributes.normal, uv = geo.attributes.uv;
+  for (let i = 0; i < p.count; i++) {
+    const ax = Math.abs(n.getX(i)), ay = Math.abs(n.getY(i)), az = Math.abs(n.getZ(i));
+    let u, v;
+    if (ay >= ax && ay >= az) { u = p.getX(i); v = p.getZ(i); }
+    else if (ax >= az) { u = p.getZ(i); v = p.getY(i); }
+    else { u = p.getX(i); v = p.getY(i); }
+    uv.setXY(i, u / tile, v / tile);
+  }
+  uv.needsUpdate = true;
+  return geo;
+}
+function box(w, h, d, x, y, z, mat, tile) {
+  const g = new THREE.BoxGeometry(w, h, d);
+  g.translate(x, y, z);
+  if (tile) worldUV(g, tile);
+  const m = new THREE.Mesh(g, mat);
+  scene.add(m);
+  return m;
+}
+
+// ---------- 재질 ----------
+const carpetMat = new THREE.MeshStandardMaterial({ map: carpetTex, roughness: 1 });
+const wallMat = new THREE.MeshStandardMaterial({ map: fabricTex, roughness: 0.95 });
+const woodMat = new THREE.MeshStandardMaterial({ map: woodTex, roughness: 0.65 });
+const darkMat = new THREE.MeshStandardMaterial({ color: 0x1c0c10, roughness: 0.9 });
+const brassMat = new THREE.MeshStandardMaterial({ color: 0xc9a15b, metalness: 0.35, roughness: 0.35 });
+const ironMat = new THREE.MeshStandardMaterial({ color: 0x1d1517, metalness: 0.3, roughness: 0.6 });
+const maskMat = new THREE.MeshStandardMaterial({ color: 0x050304, roughness: 1 });
+const ceilMat = new THREE.MeshStandardMaterial({ color: 0x140a0d, roughness: 1 });
+const velvetMat = new THREE.MeshPhysicalMaterial({ color: 0xffffff, roughness: 0.9, sheen: 1, sheenRoughness: 0.45, sheenColor: new THREE.Color('#ff8a94') });
+const curtainMat = new THREE.MeshPhysicalMaterial({ color: 0x8c1521, roughness: 0.85, sheen: 1, sheenRoughness: 0.5, sheenColor: new THREE.Color('#ff9a9a'), side: THREE.DoubleSide });
+
+// ---------- 바닥 (계단식 객석) ----------
+function floorY(x, z) {
+  if (z < STAGE.d) return STAGE.h;
+  if (z < STAGE.d + 0.5 && Math.abs(x) > 5.8) return 0.4;
+  if (z < ROW0) return 0;
+  return Math.min(ROWS, Math.floor((z - ROW0) / ROW_D)) * STEP;
+}
+box(HALL.w, 0.2, ROW0 - STAGE.d, 0, -0.1, (ROW0 + STAGE.d) / 2, carpetMat, 1.4);
+for (let r = 0; r <= ROWS; r++) {
+  const top = r * STEP, h = top + 0.2;
+  const z0 = ROW0 + r * ROW_D, z1 = r === ROWS ? HALL.d : z0 + ROW_D;
+  box(HALL.w, h, z1 - z0, 0, top - h / 2, (z0 + z1) / 2, carpetMat, 1.4);
+}
+// 무대와 옆 계단
+box(HALL.w, STAGE.h, STAGE.d, 0, STAGE.h / 2, STAGE.d / 2, woodMat, 1.6);
+box(HALL.w, 0.05, 0.06, 0, STAGE.h - 0.02, STAGE.d + 0.01, brassMat);
+for (const sx of [-1, 1]) box(2.2, 0.4, 0.5, sx * 6.9, 0.2, STAGE.d + 0.25, woodMat, 1.6);
+
+// ---------- 벽·천장 ----------
+for (const sx of [-1, 1]) {
+  box(0.2, HALL.h, HALL.d, sx * (HALL.w / 2 + 0.1), HALL.h / 2, HALL.d / 2, wallMat, 1.8);
+  // 바닥 높이를 따라가는 나무 징두리
+  const segs = [[STAGE.d, ROW0, 0]];
+  for (let r = 0; r <= ROWS; r++) segs.push([ROW0 + r * ROW_D, r === ROWS ? HALL.d : ROW0 + (r + 1) * ROW_D, r * STEP]);
+  for (const [z0, z1, y0] of segs) {
+    box(0.06, 1.1, z1 - z0, sx * (HALL.w / 2 - 0.03), y0 + 0.55, (z0 + z1) / 2, woodMat, 1.6);
+    box(0.08, 0.04, z1 - z0, sx * (HALL.w / 2 - 0.04), y0 + 1.12, (z0 + z1) / 2, brassMat);
+  }
+}
+box(HALL.w, HALL.h, 0.2, 0, HALL.h / 2, -0.1, darkMat);
+box(HALL.w, HALL.h, 0.2, 0, HALL.h / 2, HALL.d + 0.1, wallMat, 1.8);
+box(HALL.w + 0.4, 0.2, HALL.d, 0, HALL.h + 0.1, HALL.d / 2, ceilMat);
+
+// 액자 무대(프로시니엄)
+for (const sx of [-1, 1]) {
+  box(0.7, HALL.h, 0.7, sx * 7.65, HALL.h / 2, 0.55, darkMat);
+  box(0.06, HALL.h, 0.72, sx * 7.28, HALL.h / 2, 0.55, brassMat);
+}
+box(HALL.w, 0.5, 0.7, 0, HALL.h - 0.25, 0.55, darkMat);
+
+// 기둥과 벽등
+const sconces = [];
+const sconceMat = new THREE.MeshStandardMaterial({ color: 0x2a1a10, emissive: 0xffc27a, emissiveIntensity: 2 });
+const sconceGeo = new THREE.CylinderGeometry(0.14, 0.1, 0.38, 16, 1, false, 0, Math.PI);
+for (const z of [4.6, 8.4, 12.2, 16, 19.6]) {
+  for (const sx of [-1, 1]) {
+    box(0.3, HALL.h, 0.5, sx * 7.86, HALL.h / 2, z, darkMat);
+    const y = floorY(sx * 7, z) + 2.7;
+    const m = new THREE.Mesh(sconceGeo, sconceMat);
+    m.position.set(sx * 7.7, y, z);
+    m.rotation.y = sx > 0 ? Math.PI / 2 : -Math.PI / 2;
+    scene.add(m);
+    sconces.push(m);
+  }
+}
+
+// 스크린 테두리(검은 마스킹)
+box(SCREEN.w + 0.6, SCREEN.h + 0.6, 0.04, 0, SCREEN.y, 0.02, maskMat);
+
+// 비상구 표시등과 문
+const exitMat = new THREE.MeshBasicMaterial({ map: signTex('비상구', '#14a54c', '#f4fff6'), toneMapped: false, fog: false });
+const exitGeo = new THREE.PlaneGeometry(0.9, 0.32);
+function exitSign(x, y, z, ry) {
+  const m = new THREE.Mesh(exitGeo, exitMat);
+  m.position.set(x, y, z); m.rotation.y = ry; scene.add(m);
+}
+for (const sx of [-1, 1]) {
+  box(0.06, 2.2, 1.3, sx * (HALL.w / 2 - 0.04), 1.1, 3.8, woodMat, 1);
+  box(0.06, 0.05, 0.8, sx * (HALL.w / 2 - 0.09), 1.05, 3.8, brassMat);
+  exitSign(sx * (HALL.w / 2 - 0.06), 2.75, 3.8, -sx * Math.PI / 2);
+  box(1.3, 2.2, 0.06, sx * 6, BACK0 * 0 + ROWS * STEP + 1.1, HALL.d - 0.04, woodMat, 1);
+  box(0.8, 0.05, 0.06, sx * 6, ROWS * STEP + 1.05, HALL.d - 0.09, brassMat);
+  exitSign(sx * 6, ROWS * STEP + 2.6, HALL.d - 0.06, Math.PI);
+}
+
+// 영사실 창
+const boothMat = new THREE.MeshBasicMaterial({ color: 0xffb070, toneMapped: false, fog: false });
+const booth = new THREE.Mesh(new THREE.PlaneGeometry(1.2, 0.6), boothMat);
+booth.position.set(0, 6.9, HALL.d - 0.01); booth.rotation.y = Math.PI; scene.add(booth);
+box(1.4, 0.8, 0.05, 0, 6.9, HALL.d - 0.005, ironMat);
+booth.position.z = HALL.d - 0.04;
+
+// 천장 조명
+const ceilLampMat = new THREE.MeshBasicMaterial({ color: 0xffd9a8, toneMapped: false });
+const lampGeo = new THREE.CircleGeometry(0.16, 20);
+for (let i = 0; i < 4; i++) for (let j = 0; j < 6; j++) {
+  const m = new THREE.Mesh(lampGeo, ceilLampMat);
+  m.position.set(-5.4 + i * 3.6, HALL.h - 0.005, 3.5 + j * 3.2);
+  m.rotation.x = Math.PI / 2;
+  scene.add(m);
+}
+
+// 계단 발밑 등
+const stepLights = [];
+for (const sx of [-1, 1]) for (let r = 1; r <= ROWS; r++) stepLights.push([sx * 6.15, r * STEP - 0.05, ROW0 + r * ROW_D - 0.006]);
+const stepMesh = new THREE.InstancedMesh(new THREE.BoxGeometry(2.6, 0.025, 0.01), new THREE.MeshBasicMaterial({ color: 0xffa040, toneMapped: false }), stepLights.length);
+stepLights.forEach(([x, y, z], i) => stepMesh.setMatrixAt(i, new THREE.Matrix4().makeTranslation(x, y, z)));
+scene.add(stepMesh);
+
+// ---------- 좌석 ----------
+const seats = [];
+const blockers = [];
+const N = ROWS * SEATS, NA = ROWS * (SEATS + 1);
+const cushion = new THREE.InstancedMesh(new RoundedBoxGeometry(0.5, 0.13, 0.48, 3, 0.04), velvetMat, N);
+const backrest = new THREE.InstancedMesh(new RoundedBoxGeometry(0.5, 0.66, 0.11, 3, 0.04), velvetMat, N);
+const arms = new THREE.InstancedMesh(new RoundedBoxGeometry(0.07, 0.06, 0.5, 2, 0.02), woodMat, NA);
+const stands = new THREE.InstancedMesh(new THREE.BoxGeometry(0.05, 0.62, 0.34), ironMat, NA);
+const SEAT_COL = new THREE.Color('#7a1420'), BACK_COL = new THREE.Color('#8a1a26'), HI_COL = new THREE.Color('#e0a24a');
+{
+  const m4 = new THREE.Matrix4(), q = new THREE.Quaternion(), v = new THREE.Vector3(), one = new THREE.Vector3(1, 1, 1);
+  const tilt = new THREE.Quaternion().setFromEuler(new THREE.Euler(0.18, 0, 0));
+  let k = 0, a = 0;
+  for (let r = 0; r < ROWS; r++) {
+    const rowStart = ROW0 + r * ROW_D, y = r * STEP, zc = rowStart + 0.62;
+    for (let i = 0; i < SEATS; i++, k++) {
+      const x = (i - (SEATS - 1) / 2) * PITCH;
+      seats.push({ row: r, n: i + 1, x, y, z: zc, rowStart, k });
+      cushion.setMatrixAt(k, m4.compose(v.set(x, y + 0.44, zc), q.identity(), one));
+      backrest.setMatrixAt(k, m4.compose(v.set(x, y + 0.84, zc + 0.29), tilt, one));
+      cushion.setColorAt(k, SEAT_COL);
+      backrest.setColorAt(k, BACK_COL);
+    }
+    for (let i = 0; i <= SEATS; i++, a++) {
+      const x = (i - SEATS / 2) * PITCH;
+      arms.setMatrixAt(a, m4.compose(v.set(x, y + 0.66, zc + 0.03), q.identity(), one));
+      stands.setMatrixAt(a, m4.compose(v.set(x, y + 0.33, zc + 0.1), q.identity(), one));
+    }
+    const half = (SEATS / 2) * PITCH + 0.04;
+    blockers.push({ x0: -half, x1: half, z0: rowStart + 0.36, z1: rowStart + 1.02 });
+    // 열 표시판
+    const plateMat = new THREE.MeshStandardMaterial({ map: signTex(ROW_NAMES[r] + '열', '#c9a15b', '#1f2c48', 256, 128, 84), roughness: 0.4, metalness: 0.2 });
+    for (const sx of [-1, 1]) {
+      const p = new THREE.Mesh(new THREE.PlaneGeometry(0.26, 0.13), plateMat);
+      p.position.set(sx * (half + 0.012), y + 0.78, zc + 0.05);
+      p.rotation.y = sx * Math.PI / 2;
+      scene.add(p);
+    }
+  }
+}
+scene.add(cushion, backrest, arms, stands);
+
+// ---------- 스크린 (유튜브 iframe을 3D 공간에 겹친다) ----------
+const SCREEN_PX = 1280;
+const screenEl = document.createElement('div');
+screenEl.className = 'screen-surface';
+screenEl.style.width = SCREEN_PX + 'px';
+screenEl.style.height = Math.round(SCREEN_PX * SCREEN.h / SCREEN.w) + 'px';
+const screenObj = new CSS3DObject(screenEl);
+screenObj.position.set(0, SCREEN.y, SCREEN.z);
+screenObj.scale.setScalar(SCREEN.w / SCREEN_PX);
+cssScene.add(screenObj);
+
+// WebGL 화면에 스크린 모양 구멍을 뚫어 뒤의 iframe이 보이게 한다
+const hole = new THREE.Mesh(
+  new THREE.PlaneGeometry(SCREEN.w, SCREEN.h),
+  new THREE.MeshBasicMaterial({ color: 0x000000, transparent: true, opacity: 0, blending: THREE.NoBlending, fog: false, toneMapped: false })
+);
+hole.position.set(0, SCREEN.y, SCREEN.z);
+hole.renderOrder = -1;
+scene.add(hole);
+
+// ---------- 커튼 ----------
+function pleatGeo(w, h, folds, depth) {
+  const g = new THREE.PlaneGeometry(w, h, folds * 12, 6);
+  const p = g.attributes.position;
+  for (let i = 0; i < p.count; i++) {
+    const x = p.getX(i) + w / 2, u = x / w;
+    p.setX(i, x);
+    p.setZ(i, Math.sin(u * folds * Math.PI * 2) * depth + Math.sin(u * folds * Math.PI * 0.9 + 1.3) * depth * 0.35);
+  }
+  g.computeVertexNormals();
+  return g;
+}
+const CURT_W = 8.3, CURT_H = HALL.h - 0.4 - STAGE.h;
+const leftGeo = pleatGeo(CURT_W, CURT_H, 16, 0.13);
+const rightGeo = leftGeo.clone().translate(-CURT_W, 0, 0);
+const curtL = new THREE.Mesh(leftGeo, curtainMat);
+const curtR = new THREE.Mesh(rightGeo, curtainMat);
+curtL.position.set(-HALL.w / 2, STAGE.h + CURT_H / 2, 0.4);
+curtR.position.set(HALL.w / 2, STAGE.h + CURT_H / 2, 0.4);
+scene.add(curtL, curtR);
+const valance = new THREE.Mesh(pleatGeo(HALL.w, 1.0, 24, 0.08).translate(-HALL.w / 2, 0, 0), curtainMat);
+valance.position.set(0, 7.95, 0.62);
+scene.add(valance);
+box(HALL.w, 0.06, 0.05, 0, 7.45, 0.72, brassMat);
+
+// ---------- 조명 ----------
+RectAreaLightUniformsLib.init();
+const ambient = new THREE.AmbientLight(0xffe2cc, 0.35);
+const hemi = new THREE.HemisphereLight(0xffd9b8, 0x2a0a10, 0.5);
+scene.add(ambient, hemi);
+const sconceLights = [];
+for (const [x, z] of [[-6.8, 8.4], [6.8, 8.4], [-6.8, 16], [6.8, 16]]) {
+  const l = new THREE.PointLight(0xffc27a, 10, 11, 1.6);
+  l.position.set(x, floorY(x, z) + 2.8, z);
+  scene.add(l);
+  sconceLights.push(l);
+}
+const wash = new THREE.SpotLight(0xffd2a0, 260, 24, 0.62, 0.7, 1.4);
+wash.position.set(0, HALL.h - 0.3, 9.5);
+wash.target.position.set(0, 3.6, 0.4);
+scene.add(wash, wash.target);
+const screenLight = new THREE.RectAreaLight(0xc8d4ff, 0, SCREEN.w, SCREEN.h);
+screenLight.position.set(0, SCREEN.y, 0.15);
+screenLight.lookAt(0, SCREEN.y, 10);
+scene.add(screenLight);
+
+// ---------- 영사기 빛줄기와 먼지 ----------
+const ADD_BLEND = { blending: THREE.CustomBlending, blendEquation: THREE.AddEquation, blendSrc: THREE.OneFactor, blendDst: THREE.OneFactor, blendSrcAlpha: THREE.ZeroFactor, blendDstAlpha: THREE.OneFactor };
+const apex = new THREE.Vector3(0, 6.9, HALL.d - 0.1);
+const corners = [[-1, -1], [1, -1], [1, 1], [-1, 1]].map(([a, b]) => new THREE.Vector3(a * (SCREEN.w / 2 - 0.2), SCREEN.y + b * (SCREEN.h / 2 - 0.2), 0.2));
+const beamUniforms = { uI: { value: 0 }, uTime: { value: 0 }, uColor: { value: new THREE.Color(0.75, 0.82, 1.0) } };
+{
+  const pos = [], tt = [], ee = [];
+  for (let i = 0; i < 4; i++) {
+    const c1 = corners[i], c2 = corners[(i + 1) % 4];
+    pos.push(apex.x, apex.y, apex.z, c1.x, c1.y, c1.z, c2.x, c2.y, c2.z);
+    tt.push(0, 1, 1);
+    ee.push(0.5, 0, 1);
+  }
+  const g = new THREE.BufferGeometry();
+  g.setAttribute('position', new THREE.Float32BufferAttribute(pos, 3));
+  g.setAttribute('t', new THREE.Float32BufferAttribute(tt, 1));
+  g.setAttribute('e', new THREE.Float32BufferAttribute(ee, 1));
+  const m = new THREE.ShaderMaterial({
+    uniforms: beamUniforms, transparent: true, depthWrite: false, side: THREE.DoubleSide, ...ADD_BLEND,
+    vertexShader: `attribute float t; attribute float e; varying float vT; varying float vE; varying vec3 vP;
+      void main(){ vT=t; vE=e; vP=position; gl_Position=projectionMatrix*modelViewMatrix*vec4(position,1.0); }`,
+    fragmentShader: `uniform float uI; uniform float uTime; uniform vec3 uColor; varying float vT; varying float vE; varying vec3 vP;
+      void main(){
+        float fade = smoothstep(0.0,0.1,vT)*(1.0-smoothstep(0.4,0.95,vT));
+        fade *= pow(sin(3.14159*clamp(vE,0.0,1.0)),0.8);
+        fade *= smoothstep(1.5,7.0,length(vP-cameraPosition));
+        float n = 0.75+0.25*sin(vP.x*3.1+uTime*0.7)*sin(vP.y*2.3-uTime*0.5);
+        float a = uI*fade*n; gl_FragColor = vec4(uColor*a, a); }`,
+  });
+  const beam = new THREE.Mesh(g, m);
+  beam.renderOrder = 2;
+  scene.add(beam);
+
+  const COUNT = 420, dp = [], seed = [];
+  for (let i = 0; i < COUNT; i++) {
+    const tgt = new THREE.Vector3((Math.random() - 0.5) * SCREEN.w * 0.9, SCREEN.y + (Math.random() - 0.5) * SCREEN.h * 0.9, 0.2);
+    const p = apex.clone().lerp(tgt, 0.08 + Math.random() * 0.6);
+    dp.push(p.x, p.y, p.z); seed.push(Math.random() * 100);
+  }
+  const dg = new THREE.BufferGeometry();
+  dg.setAttribute('position', new THREE.Float32BufferAttribute(dp, 3));
+  dg.setAttribute('seed', new THREE.Float32BufferAttribute(seed, 1));
+  const dm = new THREE.ShaderMaterial({
+    uniforms: beamUniforms, transparent: true, depthWrite: false, ...ADD_BLEND,
+    vertexShader: `attribute float seed; uniform float uTime; varying float vA;
+      void main(){
+        vec3 p = position + vec3(sin(uTime*0.13+seed)*0.35, sin(uTime*0.09+seed*1.7)*0.25, cos(uTime*0.11+seed*0.6)*0.35);
+        vec4 mv = modelViewMatrix*vec4(p,1.0);
+        gl_PointSize = 16.0/(-mv.z);
+        vA = (0.5+0.5*sin(uTime*0.8+seed*3.0))*smoothstep(2.0,6.0,-mv.z);
+        gl_Position = projectionMatrix*mv; }`,
+    fragmentShader: `uniform float uI; uniform vec3 uColor; varying float vA;
+      void main(){ float d = length(gl_PointCoord-0.5); float a = smoothstep(0.5,0.0,d)*uI*3.5*vA; gl_FragColor = vec4(uColor*a, a); }`,
+  });
+  const dust = new THREE.Points(dg, dm);
+  dust.renderOrder = 3;
+  scene.add(dust);
+}
+
+// ---------- 유튜브 플레이어 (iframe API를 postMessage로 직접 다룬다) ----------
+const yt = { iframe: null, id: null, raw: '', ready: false, state: -1, time: 0, vol: 80, muted: false, title: '', timer: 0 };
+function ytPost(msg) {
+  yt.iframe?.contentWindow?.postMessage(JSON.stringify({ ...msg, id: 1, channel: 'widget' }), 'https://www.youtube.com');
+}
+function ytCmd(func, args = []) { ytPost({ event: 'command', func, args }); }
+function ytListen() {
+  clearInterval(yt.timer);
+  let tries = 0;
+  yt.timer = setInterval(() => {
+    if (yt.ready || ++tries > 60) return clearInterval(yt.timer);
+    ytPost({ event: 'listening' });
+  }, 300);
+}
+function parseTime(t) {
+  if (!t) return 0;
+  if (/^\d+$/.test(t)) return +t;
+  const m = t.match(/^(?:(\d+)h)?(?:(\d+)m)?(?:(\d+)s)?$/);
+  return m ? (+(m[1] || 0)) * 3600 + (+(m[2] || 0)) * 60 + (+(m[3] || 0)) : 0;
+}
+function parseYouTube(text) {
+  text = text.trim();
+  if (!text) return null;
+  if (/^[\w-]{11}$/.test(text)) return { id: text, start: 0 };
+  let u;
+  try { u = new URL(/^https?:\/\//i.test(text) ? text : 'https://' + text); } catch { return null; }
+  const host = u.hostname.replace(/^(www|m|music)\./, '');
+  let id = null;
+  if (host === 'youtu.be') id = u.pathname.split('/')[1];
+  else if (host === 'youtube.com' || host === 'youtube-nocookie.com') {
+    if (u.pathname === '/watch') id = u.searchParams.get('v');
+    else id = (u.pathname.match(/^\/(?:embed|shorts|live|v)\/([\w-]{11})/) || [])[1];
+  }
+  if (!id || !/^[\w-]{11}$/.test(id)) return null;
+  return { id, start: parseTime(u.searchParams.get('t') || u.searchParams.get('start')), list: u.searchParams.get('list') };
+}
+function loadVideo(p, raw) {
+  if (!yt.iframe) {
+    yt.iframe = document.createElement('iframe');
+    yt.iframe.allow = 'autoplay; encrypted-media; picture-in-picture';
+    yt.iframe.referrerPolicy = 'strict-origin-when-cross-origin';
+    yt.iframe.title = '스크린에 상영 중인 유튜브 영상';
+    yt.iframe.addEventListener('load', () => ytPost({ event: 'listening' }));
+    screenEl.appendChild(yt.iframe);
+  }
+  Object.assign(yt, { id: p.id, raw, ready: false, state: -1, time: p.start || 0, title: '' });
+  const q = new URLSearchParams({ enablejsapi: 1, autoplay: 1, controls: 0, rel: 0, playsinline: 1, iv_load_policy: 3, origin: location.origin });
+  if (p.start) q.set('start', p.start);
+  if (p.list) q.set('list', p.list);
+  yt.iframe.src = `https://www.youtube.com/embed/${p.id}?${q}`;
+  ytListen();
+  show.loaded = true;
+  clearTimeout(show.autoplayCheck);
+  show.autoplayCheck = setTimeout(() => {
+    if (yt.state !== 1 && show.loaded) toast(isTouch ? '재생 버튼을 누르면 시작돼요' : 'Space를 누르면 재생돼요', 3500);
+  }, 4000);
+}
+const YT_ERRORS = {
+  2: '영상 주소가 올바르지 않아요. 링크를 다시 확인해 주세요.',
+  5: '이 브라우저에서는 재생할 수 없는 영상이에요. 다른 링크를 넣어 주세요.',
+  100: '없어졌거나 비공개인 영상이에요. 다른 링크를 넣어 주세요.',
+  101: '이 영상은 유튜브 밖에서 재생하는 걸 막아 뒀어요. 다른 영상 링크를 넣어 주세요.',
+  150: '이 영상은 유튜브 밖에서 재생하는 걸 막아 뒀어요. 다른 영상 링크를 넣어 주세요.',
+  153: '유튜브가 재생을 거부했어요. 페이지를 새로고침한 뒤 다시 넣어 주세요.',
+};
+addEventListener('message', (e) => {
+  if (!/^https:\/\/www\.youtube(-nocookie)?\.com$/.test(e.origin) || e.source !== yt.iframe?.contentWindow) return;
+  let d;
+  try { d = typeof e.data === 'string' ? JSON.parse(e.data) : e.data; } catch { return; }
+  if (!d || !d.event) return;
+  if (d.event === 'onReady' || d.event === 'initialDelivery') {
+    if (!yt.ready) {
+      yt.ready = true;
+      ytCmd('addEventListener', ['onStateChange']);
+      ytCmd('addEventListener', ['onError']);
+      ytCmd('setVolume', [yt.vol]);
+    }
+  }
+  if (d.event === 'initialDelivery' || d.event === 'infoDelivery') {
+    const i = d.info || {};
+    if (typeof i.playerState === 'number') yt.state = i.playerState;
+    if (typeof i.currentTime === 'number') yt.time = i.currentTime;
+    if (typeof i.muted === 'boolean') yt.muted = i.muted;
+    if (i.videoData?.title) yt.title = i.videoData.title;
+  }
+  if (d.event === 'onStateChange' && typeof d.info === 'number') yt.state = d.info;
+  if (d.event === 'onError') {
+    show.loaded = false;
+    clearTimeout(show.autoplayCheck);
+    openMenu(YT_ERRORS[d.info] || `영상을 불러오지 못했어요 (오류 ${d.info}). 다른 링크를 넣어 주세요.`);
+  }
+});
+function togglePlay() {
+  if (!yt.iframe) return;
+  if (yt.state === 1 || yt.state === 3) { ytCmd('pauseVideo'); yt.state = 2; toast('일시정지'); }
+  else { ytCmd('playVideo'); yt.state = 1; toast('재생'); }
+}
+function seek(delta) {
+  if (!yt.iframe) return;
+  yt.time = Math.max(0, yt.time + delta);
+  ytCmd('seekTo', [yt.time, true]);
+  toast(delta > 0 ? '10초 앞으로' : '10초 뒤로');
+}
+function setVolume(v) {
+  yt.vol = Math.max(0, Math.min(100, v));
+  ytCmd('setVolume', [yt.vol]);
+  if (yt.muted && yt.vol > 0) { ytCmd('unMute'); yt.muted = false; }
+  toast('볼륨 ' + yt.vol);
+}
+function toggleMute() {
+  yt.muted = !yt.muted;
+  ytCmd(yt.muted ? 'mute' : 'unMute');
+  toast(yt.muted ? '소리 끔' : '소리 켬');
+}
+
+// ---------- 화면 표시 ----------
+let toastTimer = 0;
+function toast(text, ms = 1400) {
+  const t = $('toast');
+  t.textContent = text;
+  t.classList.remove('off');
+  clearTimeout(toastTimer);
+  toastTimer = setTimeout(() => t.classList.add('off'), ms);
+}
+const KEYS_DESKTOP = [['W A S D', '걷기'], ['Shift', '빨리 걷기'], ['E', '앉기·일어나기'], ['Space', '재생·일시정지'], ['J L', '10초 뒤로·앞으로'], ['M', '소리 끄기'], ['마우스 휠', '볼륨'], ['Esc', '이 창 열기']];
+const KEYS_TOUCH = [['왼쪽 원', '끌어서 걷기'], ['화면', '끌어서 둘러보기'], ['앉기', '가까운 자리에 앉기'], ['메뉴', '이 창 열기']];
+$('keys').innerHTML = (isTouch ? KEYS_TOUCH : KEYS_DESKTOP).map(([k, v]) => `<div><kbd>${k}</kbd><span>${v}</span></div>`).join('');
+$('hint').innerHTML = isTouch ? '' : [['WASD', '걷기'], ['E', '앉기', 'hint-sit'], ['Space', '재생·정지'], ['Esc', '메뉴']].map(([k, v, id]) => `<span><kbd>${k}</kbd> <span${id ? ` id="${id}"` : ''}>${v}</span></span>`).join('');
+$('stick').hidden = $('tbtns').hidden = !isTouch;
+$('cross').hidden = isTouch;
+if (!document.documentElement.requestFullscreen) $('fs').hidden = true;
+
+// ---------- 상태 ----------
+const show = { loaded: false, curtain: 0, house: 1, autoplayCheck: 0 };
+const player = { x: 0, z: 19, eye: 4.6, yaw: 0, pitch: 0, seated: null, tween: null, bob: 0 };
+let mode = 'lobby';
+let overlayOpen = true;
+let locked = false;
+let hiSeat = null;
+
+const overlay = $('overlay'), hud = $('hud'), input = $('link'), err = $('err');
+
+function setError(msg) {
+  err.textContent = msg || '';
+  err.hidden = !msg;
+}
+function updateForm() {
+  const inside = mode === 'inside';
+  const p = parseYouTube(input.value);
+  const same = inside && show.loaded && (!input.value.trim() || (p && p.id === yt.id));
+  $('go').textContent = same ? '계속 관람' : '상영 시작';
+  $('lede').hidden = inside;
+  const nowEl = $('now');
+  nowEl.hidden = !(inside && show.loaded);
+  if (!nowEl.hidden) nowEl.innerHTML = '지금 상영 중: <strong></strong>', nowEl.querySelector('strong').textContent = yt.title || yt.raw;
+}
+function openMenu(msg) {
+  overlayOpen = true;
+  overlay.hidden = false;
+  hud.hidden = true;
+  if (document.pointerLockElement) document.exitPointerLock();
+  setError(msg);
+  if (mode === 'inside' && show.loaded && !input.value) input.value = yt.raw;
+  updateForm();
+  keys.clear();
+}
+function closeMenu() {
+  overlayOpen = false;
+  overlay.hidden = true;
+  hud.hidden = false;
+  setError('');
+}
+function lockPointer() {
+  if (isTouch) return;
+  try {
+    const r = canvas.requestPointerLock();
+    if (r && r.catch) r.catch(() => toast('화면을 한 번 클릭하면 시점 조작이 켜져요', 2500));
+  } catch { /* 지원하지 않는 브라우저 */ }
+}
+function enterHall() {
+  mode = 'inside';
+  const e = new THREE.Euler().setFromQuaternion(camera.quaternion, 'YXZ');
+  Object.assign(player, { x: camera.position.x, z: camera.position.z, eye: camera.position.y, yaw: e.y, pitch: e.x });
+}
+$('form').addEventListener('submit', (e) => {
+  e.preventDefault();
+  const val = input.value.trim();
+  const p = parseYouTube(val);
+  if (mode === 'inside' && show.loaded && (!val || (p && p.id === yt.id))) {
+    closeMenu(); lockPointer();
+    return;
+  }
+  if (!val) { setError('유튜브 링크를 넣어 주세요.'); input.focus(); return; }
+  if (!p) { setError('유튜브 영상 주소가 아니에요. youtube.com/watch?v=… 이나 youtu.be/… 형태의 링크를 넣어 주세요.'); input.focus(); return; }
+  loadVideo(p, val);
+  if (mode !== 'inside') enterHall();
+  closeMenu();
+  lockPointer();
+  toast(player.seated ? '상영을 시작해요' : '상영을 시작해요. 마음에 드는 자리를 찾아 앉아 보세요', 3200);
+});
+input.addEventListener('input', () => { setError(''); updateForm(); });
+$('sample').addEventListener('click', () => { input.value = SAMPLE; setError(''); updateForm(); input.focus(); });
+$('fs').addEventListener('click', () => {
+  if (document.fullscreenElement) document.exitFullscreen();
+  else document.documentElement.requestFullscreen?.().catch(() => {});
+});
+document.addEventListener('fullscreenchange', () => { $('fs').textContent = document.fullscreenElement ? '전체 화면 끄기' : '전체 화면으로 보기'; });
+
+document.addEventListener('pointerlockchange', () => {
+  locked = document.pointerLockElement === canvas;
+  if (!locked && mode === 'inside' && !overlayOpen) openMenu();
+});
+
+// ---------- 앉기 ----------
+function seatLabel(s) { return `${ROW_NAMES[s.row]}열 ${s.n}번`; }
+function nearestSeat() {
+  let best = null, bd = 1.3;
+  for (const s of seats) {
+    const d = Math.hypot(s.x - player.x, s.z - player.z);
+    if (d < bd && Math.abs(floorY(player.x, player.z) - s.y) < 0.65) { bd = d; best = s; }
+  }
+  return best;
+}
+function highlight(s) {
+  if (s === hiSeat) return;
+  if (hiSeat) { cushion.setColorAt(hiSeat.k, SEAT_COL); backrest.setColorAt(hiSeat.k, BACK_COL); }
+  if (s) { cushion.setColorAt(s.k, HI_COL); backrest.setColorAt(s.k, HI_COL); }
+  cushion.instanceColor.needsUpdate = backrest.instanceColor.needsUpdate = true;
+  hiSeat = s;
+}
+function wrapAngle(a) { return Math.atan2(Math.sin(a), Math.cos(a)); }
+function startTween(to, dur = 0.7) {
+  player.tween = { from: { x: player.x, z: player.z, eye: player.eye, yaw: player.yaw, pitch: player.pitch }, to, t: 0, dur: reduceMotion ? 0.01 : dur };
+}
+function sitOrStand() {
+  if (player.tween) return;
+  if (player.seated) {
+    const s = player.seated;
+    player.seated = null;
+    startTween({ x: s.x, z: s.rowStart + 0.07, eye: s.y + EYE_STAND, yaw: player.yaw, pitch: player.pitch * 0.5 }, 0.55);
+    toast('자리에서 일어났어요');
+    return;
+  }
+  const s = hiSeat || nearestSeat();
+  if (!s) { toast('가까이에 빈자리가 없어요. 좌석 옆으로 다가가 보세요'); return; }
+  highlight(null);
+  player.seated = s;
+  const eye = s.y + EYE_SIT;
+  const pitch = Math.atan2(SCREEN.y - eye, s.z - SCREEN.z) * 0.85;
+  startTween({ x: s.x, z: s.z + 0.04, eye, yaw: 0, pitch });
+  toast(`${seatLabel(s)}에 앉았어요`);
+}
+
+// ---------- 입력 ----------
+const keys = new Set();
+addEventListener('keydown', (e) => {
+  if (overlayOpen) return;
+  if (mode !== 'inside') return;
+  const k = e.code;
+  keys.add(k);
+  if (k === 'KeyE') sitOrStand();
+  else if (k === 'Space' || k === 'KeyK') { e.preventDefault(); togglePlay(); }
+  else if (k === 'KeyJ') seek(-10);
+  else if (k === 'KeyL') seek(10);
+  else if (k === 'KeyM') toggleMute();
+  else if (k === 'KeyF') document.fullscreenElement ? document.exitFullscreen() : document.documentElement.requestFullscreen?.().catch(() => {});
+  else if (k === 'Escape' && !locked) openMenu();
+});
+addEventListener('keyup', (e) => keys.delete(e.code));
+addEventListener('blur', () => keys.clear());
+addEventListener('wheel', (e) => {
+  if (overlayOpen || mode !== 'inside') return;
+  setVolume(yt.vol + (e.deltaY < 0 ? 5 : -5));
+}, { passive: true });
+
+function look(dx, dy, sens) {
+  player.yaw -= dx * sens;
+  player.pitch = Math.max(-1.45, Math.min(1.45, player.pitch - dy * sens));
+}
+document.addEventListener('mousemove', (e) => {
+  if (locked && !overlayOpen && !player.tween) look(e.movementX, e.movementY, 0.0022);
+});
+// 화면 끌기로 둘러보기 (터치, 또는 마우스 잠금이 안 될 때)
+let drag = null;
+canvas.addEventListener('pointerdown', (e) => {
+  if (overlayOpen || mode !== 'inside' || locked) return;
+  drag = { id: e.pointerId, x: e.clientX, y: e.clientY, moved: 0 };
+  canvas.setPointerCapture(e.pointerId);
+});
+canvas.addEventListener('pointermove', (e) => {
+  if (!drag || e.pointerId !== drag.id) return;
+  const dx = e.clientX - drag.x, dy = e.clientY - drag.y;
+  drag.x = e.clientX; drag.y = e.clientY; drag.moved += Math.abs(dx) + Math.abs(dy);
+  if (!player.tween) look(dx, dy, e.pointerType === 'touch' ? 0.006 : 0.004);
+});
+canvas.addEventListener('pointerup', (e) => {
+  if (!drag || e.pointerId !== drag.id) return;
+  if (e.pointerType === 'mouse' && drag.moved < 6) lockPointer();
+  drag = null;
+});
+canvas.addEventListener('pointercancel', () => { drag = null; });
+
+// 터치 조이스틱
+const stick = { x: 0, y: 0, id: null };
+const stickEl = $('stick'), knob = $('knob');
+function stickMove(e) {
+  const r = stickEl.getBoundingClientRect();
+  let dx = e.clientX - (r.left + r.width / 2), dy = e.clientY - (r.top + r.height / 2);
+  const len = Math.hypot(dx, dy), max = r.width / 2 - 10;
+  if (len > max) { dx *= max / len; dy *= max / len; }
+  knob.style.transform = `translate(${dx}px,${dy}px)`;
+  stick.x = dx / max; stick.y = -dy / max;
+}
+stickEl.addEventListener('pointerdown', (e) => { stick.id = e.pointerId; stickEl.setPointerCapture(e.pointerId); stickMove(e); });
+stickEl.addEventListener('pointermove', (e) => { if (e.pointerId === stick.id) stickMove(e); });
+const stickEnd = (e) => { if (e.pointerId !== stick.id) return; stick.id = null; stick.x = stick.y = 0; knob.style.transform = ''; };
+stickEl.addEventListener('pointerup', stickEnd);
+stickEl.addEventListener('pointercancel', stickEnd);
+$('tSit').addEventListener('click', sitOrStand);
+$('tPlay').addEventListener('click', togglePlay);
+$('tMenu').addEventListener('click', () => openMenu());
+
+// ---------- 이동과 충돌 ----------
+function blocked(x, z) {
+  if (x < -HALL.w / 2 + 0.4 || x > HALL.w / 2 - 0.4 || z < 0.8 || z > HALL.d - 0.4) return true;
+  for (const b of blockers) if (x > b.x0 - RADIUS && x < b.x1 + RADIUS && z > b.z0 - RADIUS && z < b.z1 + RADIUS) return true;
+  return false;
+}
+const damp = (a, b, k, dt) => a + (b - a) * (1 - Math.exp(-k * dt));
+const ease = (t) => t * t * (3 - 2 * t);
+
+function updatePlayer(dt) {
+  const tw = player.tween;
+  if (tw) {
+    tw.t = Math.min(1, tw.t + dt / tw.dur);
+    const k = ease(tw.t), f = tw.from, to = tw.to;
+    player.x = f.x + (to.x - f.x) * k;
+    player.z = f.z + (to.z - f.z) * k;
+    player.eye = f.eye + (to.eye - f.eye) * k;
+    player.yaw = f.yaw + wrapAngle(to.yaw - f.yaw) * k;
+    player.pitch = f.pitch + (to.pitch - f.pitch) * k;
+    if (tw.t >= 1) player.tween = null;
+    return;
+  }
+  let moving = false;
+  if (!player.seated && !overlayOpen) {
+    let fw = stick.y, st = stick.x;
+    if (keys.has('KeyW') || keys.has('ArrowUp')) fw += 1;
+    if (keys.has('KeyS') || keys.has('ArrowDown')) fw -= 1;
+    if (keys.has('KeyD') || keys.has('ArrowRight')) st += 1;
+    if (keys.has('KeyA') || keys.has('ArrowLeft')) st -= 1;
+    const len = Math.hypot(fw, st);
+    if (len > 0.05) {
+      if (len > 1) { fw /= len; st /= len; }
+      const speed = keys.has('ShiftLeft') || keys.has('ShiftRight') ? 5.2 : 3.0;
+      const sy = Math.sin(player.yaw), cy = Math.cos(player.yaw);
+      const dx = (-sy * fw + cy * st) * speed * dt, dz = (-cy * fw - sy * st) * speed * dt;
+      if (!blocked(player.x + dx, player.z)) player.x += dx;
+      if (!blocked(player.x, player.z + dz)) player.z += dz;
+      player.bob += dt * speed * 2.2;
+      moving = true;
+    }
+  }
+  const target = player.seated ? player.seated.y + EYE_SIT : floorY(player.x, player.z) + EYE_STAND;
+  player.eye = damp(player.eye, target, 9, dt);
+  if (!moving) player.bob = damp(player.bob, Math.round(player.bob / Math.PI) * Math.PI, 6, dt);
+}
+
+let sitLabel = '';
+function setSitLabel(t) {
+  if (t === sitLabel) return;
+  sitLabel = t;
+  $('tSit').textContent = t;
+  const hk = $('hint-sit');
+  if (hk) hk.textContent = t;
+}
+function updateSeatPrompt() {
+  const prompt = $('prompt');
+  if (mode !== 'inside' || overlayOpen || player.tween) { prompt.hidden = true; return; }
+  if (player.seated) {
+    highlight(null);
+    prompt.hidden = true;
+    setSitLabel('일어나기');
+    return;
+  }
+  setSitLabel('앉기');
+  const s = nearestSeat();
+  highlight(s);
+  prompt.hidden = !s;
+  if (s) prompt.textContent = isTouch ? `앉기 버튼으로 ${seatLabel(s)}에 앉기` : `E 눌러서 ${seatLabel(s)}에 앉기`;
+}
+
+// ---------- 매 프레임 ----------
+const clock = new THREE.Clock();
+let time = 0;
+function frame() {
+  const dt = Math.min(clock.getDelta(), 0.05);
+  time += dt;
+
+  if (mode === 'lobby') {
+    const a = reduceMotion ? 0.4 : time * 0.06;
+    camera.position.set(Math.sin(a) * 3.2, 4.9 + Math.sin(a * 1.7) * 0.25, 18.8);
+    camera.lookAt(0, 4.1, 0);
+  } else {
+    updatePlayer(dt);
+    const bobY = player.seated || player.tween ? 0 : Math.sin(player.bob) * 0.035;
+    camera.position.set(player.x, player.eye + bobY, player.z);
+    camera.rotation.set(player.pitch, player.yaw, 0, 'YXZ');
+  }
+  updateSeatPrompt();
+
+  // 막: 영상이 걸리면 열리고, 끝나면 닫힌다
+  const playing = yt.state === 1 || yt.state === 3;
+  const curtainTarget = show.loaded && yt.state !== 0 ? 1 : 0;
+  const cs = reduceMotion ? 2 : 1 / 4.5;
+  show.curtain += Math.sign(curtainTarget - show.curtain) * Math.min(Math.abs(curtainTarget - show.curtain), dt * cs);
+  const o = ease(show.curtain);
+  const sx = 1 - 0.72 * o;
+  curtL.scale.set(sx, 1, 1 + 1.4 * o);
+  curtR.scale.set(sx, 1, 1 + 1.4 * o);
+
+  // 객석 조명: 상영 중엔 어둡게, 일시정지면 반쯤 밝게
+  const houseTarget = mode === 'inside' && show.loaded ? (playing ? 0.1 : 0.5) : 1;
+  show.house = damp(show.house, houseTarget, 1.4, dt);
+  const h = show.house;
+  ambient.intensity = 0.06 + 0.32 * h;
+  hemi.intensity = 0.05 + 0.45 * h;
+  sconceLights.forEach((l) => (l.intensity = 1 + 11 * h));
+  sconceMat.emissiveIntensity = 0.4 + 2 * h;
+  ceilLampMat.color.setRGB(1, 0.85, 0.66).multiplyScalar(0.12 + 0.88 * h);
+  wash.intensity = 260 * (1 - o * 0.85) * (0.3 + 0.7 * h);
+
+  // 스크린 빛 (영상 픽셀은 읽을 수 없어 밝기만 흔들어 준다)
+  const flick = 0.82 + 0.1 * Math.sin(time * 2.3) * Math.sin(time * 0.71) + 0.08 * Math.sin(time * 5.7 + Math.sin(time));
+  screenLight.intensity = o * (playing ? 4.2 : 1.8) * flick;
+  screenLight.color.setHSL(0.6 + 0.05 * Math.sin(time * 0.23), 0.3, 0.78);
+  beamUniforms.uI.value = damp(beamUniforms.uI.value, playing ? 0.05 * o : 0, 2, dt);
+  beamUniforms.uTime.value = time;
+  boothMat.color.setRGB(1, 0.69, 0.44).lerp(new THREE.Color(1.3, 1.35, 1.5), playing ? 1 : 0);
+
+  if (isTouch) $('tPlay').textContent = playing ? '정지' : '재생';
+
+  renderer.render(scene, camera);
+  cssRenderer.render(cssScene, camera);
+  requestAnimationFrame(frame);
+}
+frame();
+if (!isTouch) input.focus({ preventScroll: true });
+</script>
+</body>
+</html>
