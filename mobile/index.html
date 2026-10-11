@@ -72,13 +72,10 @@ button{font:inherit;cursor:pointer;touch-action:manipulation}
 #stick{position:absolute;left:max(20px,env(safe-area-inset-left));bottom:max(20px,env(safe-area-inset-bottom));width:132px;height:132px;border-radius:50%;
   border:2px solid rgba(255,236,214,.4);background:rgba(22,8,11,.38);pointer-events:auto;touch-action:none}
 #knob{position:absolute;left:50%;top:50%;width:56px;height:56px;margin:-28px 0 0 -28px;border-radius:50%;background:rgba(255,236,214,.6)}
-#tbtns{position:absolute;right:max(16px,env(safe-area-inset-right));bottom:max(20px,env(safe-area-inset-bottom));display:grid;grid-template-columns:repeat(2,auto);gap:10px;pointer-events:auto}
-.hb{min-width:84px;height:52px;padding:0 14px;border-radius:26px;border:1.5px solid rgba(255,236,214,.42);background:var(--hud-bg);color:var(--hud);font-size:16px}
+#tbtns{position:absolute;right:max(16px,env(safe-area-inset-right));bottom:max(20px,env(safe-area-inset-bottom));display:flex;flex-direction:column;align-items:stretch;gap:8px;pointer-events:auto}
+.hb{min-width:96px;height:48px;padding:0 14px;border-radius:26px;border:1.5px solid rgba(255,236,214,.42);background:var(--hud-bg);color:var(--hud);font-size:16px}
 .hb:active{background:rgba(179,36,46,.8)}
 #back{position:absolute;right:max(12px,env(safe-area-inset-right));top:max(12px,env(safe-area-inset-top));pointer-events:auto}
-@media (orientation:portrait){
-  #tbtns{grid-template-columns:auto}
-}
 @media (max-height:480px){
   .lede,.guide{display:none}
   h1{font-size:34px}
@@ -96,8 +93,8 @@ button{font:inherit;cursor:pointer;touch-action:manipulation}
   <div id="stick"><div id="knob"></div></div>
   <div id="tbtns">
     <button class="hb" id="tSit" type="button">앉기</button>
-    <button class="hb" id="tPlay" type="button">재생</button>
     <button class="hb" id="tScreen" type="button">스크린 조작</button>
+    <button class="hb" id="tPlay" type="button">재생</button>
     <button class="hb" id="tMenu" type="button">메뉴</button>
   </div>
   <button class="hb" id="back" type="button" hidden>돌아가기</button>
