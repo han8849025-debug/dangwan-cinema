@@ -761,7 +761,7 @@ function sitAt(s) {
   const dist = Math.hypot(s.x - player.x, s.z - player.z);
   player.seated = s;
   const eye = s.y + EYE_SIT;
-  const pitch = Math.atan2(SCREEN.y - eye, s.z - SCREEN.z) * 0.85;
+  const pitch = Math.atan2(SCREEN.y - eye, s.z - SCREEN.z);
   startTween({ x: s.x, z: s.z + 0.04, eye, yaw: 0, pitch }, Math.min(1.8, 0.7 + dist * 0.07));
   toast(`${seatLabel(s)}에 앉았어요`);
 }
