@@ -129,6 +129,7 @@ kbd{font:12px/1 var(--body);border:1px solid rgba(31,44,72,.5);border-bottom-wid
         <div class="links">
           <button class="textlink" id="sample" type="button">예시 영상 넣기</button>
           <button class="textlink" id="fs" type="button">전체 화면으로 보기</button>
+          <a class="textlink" id="mobileLink" href="mobile/" hidden>폰용 극장으로 가기</a>
         </div>
       </form>
       <div class="keys" id="keys"></div>
@@ -154,7 +155,7 @@ import { RoundedBoxGeometry } from 'three/addons/geometries/RoundedBoxGeometry.j
 import { RectAreaLightUniformsLib } from 'three/addons/lights/RectAreaLightUniformsLib.js';
 
 const $ = (id) => document.getElementById(id);
-const isTouch = matchMedia('(hover: none) and (pointer: coarse)').matches;
+const isTouch = matchMedia('(pointer: coarse)').matches || /Android|iPhone|iPad|Mobile/i.test(navigator.userAgent);
 const reduceMotion = matchMedia('(prefers-reduced-motion: reduce)').matches;
 
 // ---------- 극장 치수 (단위: 미터) ----------
@@ -685,6 +686,7 @@ $('hint').innerHTML = isTouch ? '' : [['WASD', '걷기'], ['E', '앉기', 'hint-
 $('stick').hidden = $('tbtns').hidden = !isTouch;
 $('cross').hidden = isTouch;
 if (!document.documentElement.requestFullscreen) $('fs').hidden = true;
+$('mobileLink').hidden = !isTouch;
 
 // ---------- 상태 ----------
 const show = { loaded: false, curtain: 0, house: 1, autoplayCheck: 0 };
